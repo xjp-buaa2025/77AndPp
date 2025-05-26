@@ -511,6 +511,19 @@
             transform: translateX(0);
         }
 
+        /* 环境指示器 */
+        .env-indicator {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 0.8rem;
+            z-index: 1000;
+        }
+
         /* 响应式设计 */
         @media (max-width: 768px) {
             .container {
@@ -558,7 +571,7 @@
             height: 50px;
             display: flex;
             align-items: center;
-            justify-Content: center;
+            justify-content: center;
             cursor: pointer;
             transition: all 0.3s ease;
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
@@ -573,6 +586,11 @@
     </style>
 </head>
 <body>
+    <!-- 环境指示器 -->
+    <div class="env-indicator" id="envIndicator">
+        环境检测中...
+    </div>
+
     <!-- 星空背景 -->
     <div class="stars" id="stars"></div>
 
@@ -622,7 +640,7 @@
                 <div class="empty-icon">
                     <i class="fas fa-star"></i>
                 </div>
-                <div class="empty-text">这里还空着，等你们一起填满～</div>
+                <div class="empty-text">这里还空着，等我们一起填满～</div>
                 <div class="empty-subtext">今天也来许个小愿望吧</div>
                 <button class="btn btn-primary" onclick="showAddWishModal()">
                     开始许愿 <i class="fas fa-magic" style="margin-left: 8px;"></i>
@@ -680,6 +698,22 @@
         let wishes = [];
         let editingWishId = null;
         
+        // 自动检测 API 基础URL
+        const getApiBaseUrl = () => {
+            const hostname = window.location.hostname;
+            const protocol = window.location.protocol;
+            
+            if (hostname === 'localhost' || hostname === '127.0.0.1') {
+                // 本地开发环境
+                return 'http://localhost:3000/api';
+            } else {
+                // 生产环境（Vercel 或其他部署环境）
+                return `${protocol}//${hostname}/api`;
+            }
+        };
+
+        const API_BASE_URL = getApiBaseUrl();
+        
         // 类型图标映射
         const typeIcons = {
             '旅行': '🌏',
@@ -695,9 +729,30 @@
         // 初始化
         document.addEventListener('DOMContentLoaded', function() {
             createStars();
+            updateEnvironmentIndicator();
             // 页面加载时就开始加载心愿数据
             loadWishes();
         });
+
+        // 更新环境指示器
+        function updateEnvironmentIndicator() {
+            const indicator = document.getElementById('envIndicator');
+            const hostname = window.location.hostname;
+            
+            if (hostname === 'localhost' || hostname === '127.0.0.1') {
+                indicator.textContent = `🏠 本地环境 - API: ${API_BASE_URL}`;
+                indicator.style.background = 'rgba(52, 152, 219, 0.8)';
+            } else {
+                indicator.textContent = `🌐 生产环境 - API: ${API_BASE_URL}`;
+                indicator.style.background = 'rgba(46, 204, 113, 0.8)';
+            }
+            
+            // 3秒后隐藏指示器
+            setTimeout(() => {
+                indicator.style.opacity = '0.3';
+                indicator.style.fontSize = '0.7rem';
+            }, 3000);
+        }
 
         // 创建星空背景
         function createStars() {
@@ -815,6 +870,7 @@
                 updateWishlistDisplay();
                 closeModal();
             } catch (error) {
+                console.error('保存心愿失败:', error);
                 showMessage(error.message || '保存失败，请稍后再试', 'error');
             } finally {
                 submitBtn.innerHTML = originalText;
@@ -848,6 +904,7 @@
 
                 updateWishlistDisplay();
             } catch (error) {
+                console.error('更新心愿状态失败:', error);
                 showMessage(error.message || '更新失败，请稍后再试', 'error');
             }
         }
@@ -864,6 +921,7 @@
                 updateWishlistDisplay();
                 showMessage('心愿已删除', 'success');
             } catch (error) {
+                console.error('删除心愿失败:', error);
                 showMessage(error.message || '删除失败，请稍后再试', 'error');
             }
         }
@@ -993,12 +1051,10 @@
             }, 3000);
         }
 
-        // API 基础URL
-        const API_BASE_URL = 'http://localhost:3000/api';
-
-        // 模拟API调用
+        // API 调用函数
         async function apiCall(endpoint, options = {}) {
             try {
+                console.log(`🌐 API调用: ${API_BASE_URL}${endpoint}`);
                 const response = await fetch(`${API_BASE_URL}${endpoint}`, {
                     headers: {
                         'Content-Type': 'application/json',
@@ -1010,7 +1066,7 @@
                 const data = await response.json();
                 
                 if (!response.ok) {
-                    throw new Error(data.message || 'API请求失败');
+                    throw new Error(data.message || `API请求失败 (${response.status})`);
                 }
                 
                 return data;
@@ -1023,18 +1079,19 @@
 
         // 离线模式处理
         function handleOfflineMode(endpoint, options) {
-            console.log('离线模式，使用本地存储');
+            console.log('🔄 启用离线模式，使用本地存储');
             
             if (!window.offlineWishes) {
-                window.offlineWishes = [];
+                window.offlineWishes = JSON.parse(localStorage.getItem('offlineWishes') || '[]');
             }
 
-            if (endpoint === '/wishes' && options.method === 'GET') {
+            if (endpoint === '/wishes' && (!options.method || options.method === 'GET')) {
                 return { success: true, data: { wishes: window.offlineWishes } };
             } else if (endpoint === '/wishes' && options.method === 'POST') {
                 const newWish = JSON.parse(options.body);
                 newWish.id = Date.now();
                 window.offlineWishes.push(newWish);
+                localStorage.setItem('offlineWishes', JSON.stringify(window.offlineWishes));
                 return { success: true, data: newWish };
             } else if (endpoint.startsWith('/wishes/') && options.method === 'PUT') {
                 const wishId = parseInt(endpoint.split('/')[2]);
@@ -1042,15 +1099,17 @@
                 const wishIndex = window.offlineWishes.findIndex(w => w.id === wishId);
                 if (wishIndex !== -1) {
                     window.offlineWishes[wishIndex] = { ...window.offlineWishes[wishIndex], ...updates };
+                    localStorage.setItem('offlineWishes', JSON.stringify(window.offlineWishes));
                     return { success: true, data: window.offlineWishes[wishIndex] };
                 }
             } else if (endpoint.startsWith('/wishes/') && options.method === 'DELETE') {
                 const wishId = parseInt(endpoint.split('/')[2]);
                 window.offlineWishes = window.offlineWishes.filter(w => w.id !== wishId);
+                localStorage.setItem('offlineWishes', JSON.stringify(window.offlineWishes));
                 return { success: true };
             }
             
-            return { success: false, message: '操作失败' };
+            throw new Error('离线模式下操作失败');
         }
 
         // 加载心愿列表
@@ -1064,6 +1123,8 @@
                     updateWishlistDisplay();
                     if (wishes.length > 0) {
                         showMessage(`加载了 ${wishes.length} 个心愿`, 'success');
+                    } else {
+                        console.log('心愿列表为空');
                     }
                 } else {
                     throw new Error(response.message);
@@ -1071,6 +1132,9 @@
             } catch (error) {
                 console.error('加载心愿失败:', error);
                 showMessage('连接服务器失败，使用离线模式', 'warning');
+                // 在离线模式下也尝试加载本地数据
+                wishes = JSON.parse(localStorage.getItem('offlineWishes') || '[]');
+                updateWishlistDisplay();
             }
         }
 
@@ -1143,15 +1207,6 @@
                 closeModal();
             }
         });
-
-        // 添加错误样式
-        const style = document.createElement('style');
-        style.textContent = `
-            .success-message.error {
-                background: linear-gradient(45deg, #FF6B6B, #FF8E53);
-            }
-        `;
-        document.head.appendChild(style);
     </script>
 </body>
 </html>
