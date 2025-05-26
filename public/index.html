@@ -584,9 +584,9 @@
                     <div class="planet-icon">
                         <i class="fas fa-globe-americas"></i>
                     </div>
-                    <h1 class="welcome-title">欢迎回到我们的小星球</h1>
+                    <h1 class="welcome-title">欢迎回到你们的小星球</h1>
                     <p class="welcome-subtitle">
-                        在这个专属于77和PP的小世界里<br>
+                        在这个专属于你们的小世界里<br>
                         每一个心愿都值得被珍藏<br>
                         每一份美好都值得被记录
                     </p>
@@ -622,7 +622,7 @@
                 <div class="empty-icon">
                     <i class="fas fa-star"></i>
                 </div>
-                <div class="empty-text">这里还空着，我们一起填满～</div>
+                <div class="empty-text">这里还空着，等你们一起填满～</div>
                 <div class="empty-subtext">今天也来许个小愿望吧</div>
                 <button class="btn btn-primary" onclick="showAddWishModal()">
                     开始许愿 <i class="fas fa-magic" style="margin-left: 8px;"></i>
@@ -695,6 +695,7 @@
         // 初始化
         document.addEventListener('DOMContentLoaded', function() {
             createStars();
+            // 页面加载时就开始加载心愿数据
             loadWishes();
         });
 
@@ -758,7 +759,7 @@
         }
 
         // 心愿表单提交
-        document.getElementById('wishForm').addEventListener('submit', function(e) {
+        document.getElementById('wishForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const title = document.getElementById('wishTitle').value.trim();
@@ -771,66 +772,99 @@
                 return;
             }
 
-            if (editingWishId) {
-                // 编辑现有心愿
-                const wishIndex = wishes.findIndex(w => w.id === editingWishId);
-                if (wishIndex !== -1) {
-                    wishes[wishIndex] = {
-                        ...wishes[wishIndex],
+            const submitBtn = e.target.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 保存中...';
+            submitBtn.disabled = true;
+
+            try {
+                if (editingWishId) {
+                    // 编辑现有心愿
+                    const updates = {
                         title,
                         type,
                         description,
-                        targetDate,
+                        targetDate: targetDate || null,
                         updatedAt: new Date().toISOString()
                     };
-                    showMessage('心愿更新成功！', 'success');
-                }
-            } else {
-                // 添加新心愿
-                const newWish = {
-                    id: Date.now(),
-                    title,
-                    type,
-                    description,
-                    targetDate,
-                    completed: false,
-                    createdAt: new Date().toISOString()
-                };
-                wishes.push(newWish);
-                showMessage('愿望已锁定！两个心一起想的事，完成起来也更快乐～', 'success');
-            }
 
-            saveWishes();
-            updateWishlistDisplay();
-            closeModal();
+                    await updateWishInDatabase(editingWishId, updates);
+                    
+                    const wishIndex = wishes.findIndex(w => w.id === editingWishId);
+                    if (wishIndex !== -1) {
+                        wishes[wishIndex] = { ...wishes[wishIndex], ...updates };
+                    }
+                    
+                    showMessage('心愿更新成功！', 'success');
+                } else {
+                    // 添加新心愿
+                    const newWishData = {
+                        title,
+                        type,
+                        description: description || null,
+                        targetDate: targetDate || null,
+                        completed: false,
+                        createdAt: new Date().toISOString()
+                    };
+
+                    const savedWish = await saveWishToDatabase(newWishData);
+                    wishes.push(savedWish);
+                    showMessage('愿望已锁定！两个心一起想的事，完成起来也更快乐～', 'success');
+                }
+
+                updateWishlistDisplay();
+                closeModal();
+            } catch (error) {
+                showMessage(error.message || '保存失败，请稍后再试', 'error');
+            } finally {
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            }
         });
 
         // 切换心愿完成状态
-        function toggleWishStatus(wishId) {
+        async function toggleWishStatus(wishId) {
             const wish = wishes.find(w => w.id === wishId);
             if (!wish) return;
 
-            wish.completed = !wish.completed;
-            wish.completedAt = wish.completed ? new Date().toISOString() : null;
+            const newStatus = !wish.completed;
+            const updates = {
+                completed: newStatus,
+                completedAt: newStatus ? new Date().toISOString() : null
+            };
 
-            if (wish.completed) {
-                showCelebration();
-                showMessage('愿望达成啦！🎉', 'success');
-            } else {
-                showMessage('心愿重新激活，继续加油！', 'success');
+            try {
+                await updateWishInDatabase(wishId, updates);
+                
+                wish.completed = newStatus;
+                wish.completedAt = updates.completedAt;
+
+                if (newStatus) {
+                    showCelebration();
+                    showMessage('愿望达成啦！🎉', 'success');
+                } else {
+                    showMessage('心愿重新激活，继续加油！', 'success');
+                }
+
+                updateWishlistDisplay();
+            } catch (error) {
+                showMessage(error.message || '更新失败，请稍后再试', 'error');
             }
-
-            saveWishes();
-            updateWishlistDisplay();
         }
 
         // 删除心愿
-        function deleteWish(wishId) {
-            if (confirm('确定要删除这个心愿吗？')) {
+        async function deleteWish(wishId) {
+            if (!confirm('确定要删除这个心愿吗？')) {
+                return;
+            }
+
+            try {
+                await deleteWishFromDatabase(wishId);
                 wishes = wishes.filter(w => w.id !== wishId);
-                saveWishes();
                 updateWishlistDisplay();
                 showMessage('心愿已删除', 'success');
+            } catch (error) {
+                showMessage(error.message || '删除失败，请稍后再试', 'error');
             }
         }
 
@@ -940,36 +974,159 @@
         function showMessage(message, type = 'success') {
             const messageEl = document.getElementById('successMessage');
             messageEl.textContent = message;
-            messageEl.className = `success-message ${type === 'error' ? 'error' : ''} show`;
+            
+            // 根据类型设置不同的样式
+            let bgColor = 'linear-gradient(45deg, #4ECDC4, #44A08D)'; // success
+            if (type === 'error') {
+                bgColor = 'linear-gradient(45deg, #FF6B6B, #FF8E53)';
+            } else if (type === 'warning') {
+                bgColor = 'linear-gradient(45deg, #FFD93D, #FF6B35)';
+            } else if (type === 'info') {
+                bgColor = 'linear-gradient(45deg, #74b9ff, #0984e3)';
+            }
+            
+            messageEl.style.background = bgColor;
+            messageEl.classList.add('show');
             
             setTimeout(() => {
                 messageEl.classList.remove('show');
             }, 3000);
         }
 
-        // 保存心愿到本地存储
-        function saveWishes() {
+        // API 基础URL
+        const API_BASE_URL = 'http://localhost:3000/api';
+
+        // 模拟API调用
+        async function apiCall(endpoint, options = {}) {
             try {
-                const wishData = {
-                    wishes: wishes,
-                    savedAt: new Date().toISOString()
-                };
-                // 使用内存存储而不是localStorage
-                window.wishStorage = wishData;
+                const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...options.headers
+                    },
+                    ...options
+                });
+
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.message || 'API请求失败');
+                }
+                
+                return data;
             } catch (error) {
-                console.error('保存心愿失败:', error);
+                console.error('API调用失败:', error);
+                // 如果API调用失败，回退到本地存储
+                return handleOfflineMode(endpoint, options);
             }
         }
 
-        // 从本地存储加载心愿
-        function loadWishes() {
+        // 离线模式处理
+        function handleOfflineMode(endpoint, options) {
+            console.log('离线模式，使用本地存储');
+            
+            if (!window.offlineWishes) {
+                window.offlineWishes = [];
+            }
+
+            if (endpoint === '/wishes' && options.method === 'GET') {
+                return { success: true, data: { wishes: window.offlineWishes } };
+            } else if (endpoint === '/wishes' && options.method === 'POST') {
+                const newWish = JSON.parse(options.body);
+                newWish.id = Date.now();
+                window.offlineWishes.push(newWish);
+                return { success: true, data: newWish };
+            } else if (endpoint.startsWith('/wishes/') && options.method === 'PUT') {
+                const wishId = parseInt(endpoint.split('/')[2]);
+                const updates = JSON.parse(options.body);
+                const wishIndex = window.offlineWishes.findIndex(w => w.id === wishId);
+                if (wishIndex !== -1) {
+                    window.offlineWishes[wishIndex] = { ...window.offlineWishes[wishIndex], ...updates };
+                    return { success: true, data: window.offlineWishes[wishIndex] };
+                }
+            } else if (endpoint.startsWith('/wishes/') && options.method === 'DELETE') {
+                const wishId = parseInt(endpoint.split('/')[2]);
+                window.offlineWishes = window.offlineWishes.filter(w => w.id !== wishId);
+                return { success: true };
+            }
+            
+            return { success: false, message: '操作失败' };
+        }
+
+        // 加载心愿列表
+        async function loadWishes() {
             try {
-                if (window.wishStorage && window.wishStorage.wishes) {
-                    wishes = window.wishStorage.wishes;
+                showMessage('正在加载心愿...', 'info');
+                const response = await apiCall('/wishes');
+                
+                if (response.success) {
+                    wishes = response.data.wishes || [];
+                    updateWishlistDisplay();
+                    if (wishes.length > 0) {
+                        showMessage(`加载了 ${wishes.length} 个心愿`, 'success');
+                    }
+                } else {
+                    throw new Error(response.message);
                 }
             } catch (error) {
                 console.error('加载心愿失败:', error);
-                wishes = [];
+                showMessage('连接服务器失败，使用离线模式', 'warning');
+            }
+        }
+
+        // 保存新心愿到数据库
+        async function saveWishToDatabase(wishData) {
+            try {
+                const response = await apiCall('/wishes', {
+                    method: 'POST',
+                    body: JSON.stringify(wishData)
+                });
+
+                if (response.success) {
+                    return response.data;
+                } else {
+                    throw new Error(response.message);
+                }
+            } catch (error) {
+                console.error('保存心愿失败:', error);
+                throw error;
+            }
+        }
+
+        // 更新心愿到数据库
+        async function updateWishInDatabase(wishId, updates) {
+            try {
+                const response = await apiCall(`/wishes/${wishId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(updates)
+                });
+
+                if (response.success) {
+                    return response.data;
+                } else {
+                    throw new Error(response.message);
+                }
+            } catch (error) {
+                console.error('更新心愿失败:', error);
+                throw error;
+            }
+        }
+
+        // 从数据库删除心愿
+        async function deleteWishFromDatabase(wishId) {
+            try {
+                const response = await apiCall(`/wishes/${wishId}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.success) {
+                    return true;
+                } else {
+                    throw new Error(response.message);
+                }
+            } catch (error) {
+                console.error('删除心愿失败:', error);
+                throw error;
             }
         }
 
