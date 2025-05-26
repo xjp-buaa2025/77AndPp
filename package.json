@@ -1,44 +1,35 @@
 {
-  "name": "couple-planet",
+  "name": "our-little-planet-local",
   "version": "1.0.0",
-  "description": "我们的小星球 - 情侣专属网站",
-  "main": "index.js",
+  "description": "一个温柔浪漫的情侣专属网站 - 本地开发版本",
+  "main": "server.js",
   "scripts": {
-    "dev": "nodemon index.js",
-    "start": "node index.js",
-    "build": "echo 'Build completed'",
+    "start": "node server.js",
+    "dev": "nodemon server.js",
     "test": "echo 'No tests specified'"
   },
+  "keywords": [
+    "couple", 
+    "love", 
+    "romantic", 
+    "website", 
+    "relationship"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
   "dependencies": {
-    "bcryptjs": "^2.4.3",
-    "cloudinary": "^1.41.0",
-    "cors": "^2.8.5",
-    "dotenv": "^16.3.1",
     "express": "^4.18.2",
-    "express-rate-limit": "^7.1.5",
-    "helmet": "^7.1.0",
-    "jsonwebtoken": "^9.0.2",
-    "moment": "^2.29.4",
-    "multer": "^1.4.5-lts.1",
-    "node-cron": "^3.0.3",
+    "cors": "^2.8.5",
     "pg": "^8.11.3",
-    "uuid": "^9.0.1",
-    "validator": "^13.15.0"
+    "jsonwebtoken": "^9.0.2",
+    "bcryptjs": "^2.4.3",
+    "moment": "^2.29.4",
+    "dotenv": "^16.3.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
   },
   "engines": {
-    "node": ">=18.0.0"
-  },
-  "keywords": [
-    "couple",
-    "love",
-    "diary",
-    "nodejs",
-    "express",
-    "postgresql"
-  ],
-  "author": "Your Name",
-  "license": "MIT"
+    "node": ">=16.0.0"
+  }
 }
