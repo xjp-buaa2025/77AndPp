@@ -330,25 +330,29 @@ async function startServer() {
       isDatabaseConnected = false;
     }
     
-    app.listen(PORT, () => {
-      console.log('🎉 服务器启动成功！');
-      console.log(`📍 本地访问: http://localhost:${PORT}`);
-      console.log(`📍 API接口: http://localhost:${PORT}/api/wishes`);
+    // 在 Vercel 环境中不需要 listen
+    if (process.env.NODE_ENV !== 'production') {
+      app.listen(PORT, () => {
+        console.log('🎉 服务器启动成功！');
+        console.log(`📍 本地访问: http://localhost:${PORT}`);
+        console.log(`📍 API接口: http://localhost:${PORT}/api/wishes`);
+        console.log(`💾 数据库状态: ${isDatabaseConnected ? '✅ 已连接' : '❌ 离线模式'}`);
+        console.log('🔍 调试模式已开启，请查看控制台日志');
+      });
+    } else {
+      console.log('🎉 Vercel 无服务器函数已就绪！');
       console.log(`💾 数据库状态: ${isDatabaseConnected ? '✅ 已连接' : '❌ 离线模式'}`);
-      console.log('🔍 调试模式已开启，请查看控制台日志');
-    });
+    }
   } catch (error) {
     console.error('❌ 启动服务器失败:', error);
-    process.exit(1);
+    if (process.env.NODE_ENV !== 'production') {
+      process.exit(1);
+    }
   }
 }
 
-// 优雅关闭
-process.on('SIGINT', async () => {
-  console.log('\n正在关闭服务器...');
-  await pool.end();
-  process.exit(0);
-});
-
 // 启动应用
 startServer();
+
+// 导出 app 供 Vercel 使用
+module.exports = app;
