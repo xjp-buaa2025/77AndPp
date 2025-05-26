@@ -23,10 +23,5 @@
   "env": {
     "DATABASE_URL": "@database_url",
     "JWT_SECRET": "@jwt_secret"
-  },
-  "functions": {
-    "api/**/*.js": {
-      "runtime": "nodejs18.x"
-    }
   }
 }
