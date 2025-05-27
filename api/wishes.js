@@ -229,6 +229,9 @@ async function updateWish(req, res, pool, wishId) {
     console.log(`🔄 更新心愿 ${wishId}:`, req.body);
     const updates = req.body;
 
+        // **关键：删除前端传过来的 updatedAt 字段，避免重复赋值**
+    delete updates.updatedAt;
+
     const updateFields = [];
     const values = [];
     let paramCount = 1;
