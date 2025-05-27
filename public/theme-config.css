@@ -1,0 +1,285 @@
+/* 多主题配置文件 - 可以通过 JavaScript 动态切换主题 */
+
+/* 默认浪漫粉主题（与原有设计一致） */
+:root {
+    --theme-primary: #FFE4E6;
+    --theme-secondary: #FFF0F2;
+    --theme-accent: #E8F4F8;
+    --theme-golden: #F7D794;
+    --theme-text-primary: #4A4A4A;
+    --theme-text-secondary: #777;
+    --theme-gradient: linear-gradient(135deg, #FFE4E6 0%, #E8F4F8 100%);
+    --theme-card-bg: rgba(255, 255, 255, 0.9);
+    --theme-shadow: rgba(0, 0, 0, 0.08);
+}
+
+/* 薄荷绿主题 */
+[data-theme="mint"] {
+    --theme-primary: #E8F5E8;
+    --theme-secondary: #F0FFF0;
+    --theme-accent: #B8E6B8;
+    --theme-golden: #98D982;
+    --theme-text-primary: #2D5D2D;
+    --theme-text-secondary: #5A8A5A;
+    --theme-gradient: linear-gradient(135deg, #E8F5E8 0%, #B8E6B8 100%);
+    --theme-card-bg: rgba(248, 255, 248, 0.9);
+    --theme-shadow: rgba(45, 93, 45, 0.08);
+}
+
+/* 天空蓝主题 */
+[data-theme="sky"] {
+    --theme-primary: #E3F2FD;
+    --theme-secondary: #F1F8E9;
+    --theme-accent: #BBDEFB;
+    --theme-golden: #64B5F6;
+    --theme-text-primary: #1565C0;
+    --theme-text-secondary: #1976D2;
+    --theme-gradient: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%);
+    --theme-card-bg: rgba(227, 242, 253, 0.9);
+    --theme-shadow: rgba(21, 101, 192, 0.08);
+}
+
+/* 暖阳橙主题 */
+[data-theme="sunset"] {
+    --theme-primary: #FFF3E0;
+    --theme-secondary: #FFE0B2;
+    --theme-accent: #FFCC80;
+    --theme-golden: #FF9800;
+    --theme-text-primary: #E65100;
+    --theme-text-secondary: #FF6F00;
+    --theme-gradient: linear-gradient(135deg, #FFF3E0 0%, #FFCC80 100%);
+    --theme-card-bg: rgba(255, 243, 224, 0.9);
+    --theme-shadow: rgba(230, 81, 0, 0.08);
+}
+
+/* 紫罗兰主题 */
+[data-theme="violet"] {
+    --theme-primary: #F3E5F5;
+    --theme-secondary: #E1BEE7;
+    --theme-accent: #CE93D8;
+    --theme-golden: #AB47BC;
+    --theme-text-primary: #4A148C;
+    --theme-text-secondary: #6A1B9A;
+    --theme-gradient: linear-gradient(135deg, #F3E5F5 0%, #CE93D8 100%);
+    --theme-card-bg: rgba(243, 229, 245, 0.9);
+    --theme-shadow: rgba(74, 20, 140, 0.08);
+}
+
+/* 玫瑰金主题 */
+[data-theme="rose-gold"] {
+    --theme-primary: #FCE4EC;
+    --theme-secondary: #F8BBD9;
+    --theme-accent: #F48FB1;
+    --theme-golden: #E91E63;
+    --theme-text-primary: #880E4F;
+    --theme-text-secondary: #AD1457;
+    --theme-gradient: linear-gradient(135deg, #FCE4EC 0%, #F48FB1 100%);
+    --theme-card-bg: rgba(252, 228, 236, 0.9);
+    --theme-shadow: rgba(136, 14, 79, 0.08);
+}
+
+/* 深色主题 */
+[data-theme="dark"] {
+    --theme-primary: #2D2D30;
+    --theme-secondary: #3E3E42;
+    --theme-accent: #4F4F55;
+    --theme-golden: #FFD700;
+    --theme-text-primary: #E0E0E0;
+    --theme-text-secondary: #B0B0B0;
+    --theme-gradient: linear-gradient(135deg, #2D2D30 0%, #4F4F55 100%);
+    --theme-card-bg: rgba(45, 45, 48, 0.9);
+    --theme-shadow: rgba(255, 255, 255, 0.08);
+}
+
+/* 森林主题 */
+[data-theme="forest"] {
+    --theme-primary: #E8F5E8;
+    --theme-secondary: #C8E6C9;
+    --theme-accent: #A5D6A7;
+    --theme-golden: #66BB6A;
+    --theme-text-primary: #1B5E20;
+    --theme-text-secondary: #2E7D32;
+    --theme-gradient: linear-gradient(135deg, #E8F5E8 0%, #A5D6A7 100%);
+    --theme-card-bg: rgba(232, 245, 232, 0.9);
+    --theme-shadow: rgba(27, 94, 32, 0.08);
+}
+
+/* 主题应用到具体元素 */
+body {
+    background: var(--theme-gradient);
+    color: var(--theme-text-primary);
+}
+
+.welcome-card,
+.wish-card,
+.modal-content {
+    background: var(--theme-card-bg);
+    box-shadow: 0 10px 30px var(--theme-shadow);
+}
+
+.wish-type {
+    background: var(--theme-secondary);
+    color: var(--theme-text-primary);
+}
+
+.wish-status.completed {
+    background: var(--theme-golden);
+}
+
+.btn-primary,
+.add-wish-btn {
+    background: linear-gradient(45deg, var(--theme-golden), var(--theme-accent));
+}
+
+.success-message {
+    background: linear-gradient(45deg, var(--theme-accent), var(--theme-golden));
+}
+
+/* 主题切换器样式 */
+.theme-switcher {
+    position: fixed;
+    top: 60px;
+    right: 20px;
+    z-index: 1001;
+    background: var(--theme-card-bg);
+    border-radius: 12px;
+    padding: 10px;
+    box-shadow: 0 5px 15px var(--theme-shadow);
+    backdrop-filter: blur(10px);
+}
+
+.theme-option {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    margin: 5px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all 0.3s ease;
+    display: inline-block;
+}
+
+.theme-option:hover {
+    transform: scale(1.1);
+    border-color: var(--theme-golden);
+}
+
+.theme-option.active {
+    border-color: var(--theme-golden);
+    box-shadow: 0 0 10px var(--theme-golden);
+}
+
+/* 各主题的预览色彩 */
+.theme-option[data-theme="default"] {
+    background: linear-gradient(45deg, #FFE4E6, #E8F4F8);
+}
+
+.theme-option[data-theme="mint"] {
+    background: linear-gradient(45deg, #E8F5E8, #B8E6B8);
+}
+
+.theme-option[data-theme="sky"] {
+    background: linear-gradient(45deg, #E3F2FD, #BBDEFB);
+}
+
+.theme-option[data-theme="sunset"] {
+    background: linear-gradient(45deg, #FFF3E0, #FFCC80);
+}
+
+.theme-option[data-theme="violet"] {
+    background: linear-gradient(45deg, #F3E5F5, #CE93D8);
+}
+
+.theme-option[data-theme="rose-gold"] {
+    background: linear-gradient(45deg, #FCE4EC, #F48FB1);
+}
+
+.theme-option[data-theme="dark"] {
+    background: linear-gradient(45deg, #2D2D30, #4F4F55);
+}
+
+.theme-option[data-theme="forest"] {
+    background: linear-gradient(45deg, #E8F5E8, #A5D6A7);
+}
+
+/* 主题过渡动画 */
+* {
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* 特殊节日主题 */
+.holiday-theme {
+    position: relative;
+    overflow: hidden;
+}
+
+.holiday-theme::before {
+    content: '';
+    position: fixed;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: 
+        radial-gradient(circle at 20% 50%, rgba(255, 0, 0, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 40% 20%, rgba(0, 255, 0, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 80% 80%, rgba(0, 0, 255, 0.1) 0%, transparent 50%);
+    animation: holiday-sparkle 10s linear infinite;
+    pointer-events: none;
+    z-index: -1;
+}
+
+@keyframes holiday-sparkle {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* 响应式主题调整 */
+@media (max-width: 768px) {
+    .theme-switcher {
+        top: 10px;
+        right: 10px;
+        padding: 5px;
+    }
+    
+    .theme-option {
+        width: 25px;
+        height: 25px;
+        margin: 3px;
+    }
+}
+
+/* 打印样式 */
+@media print {
+    * {
+        background: white !important;
+        color: black !important;
+        box-shadow: none !important;
+    }
+    
+    .theme-switcher,
+    .back-btn,
+    .env-indicator {
+        display: none !important;
+    }
+}
+
+/* 高对比度模式 */
+@media (prefers-contrast: high) {
+    :root {
+        --theme-text-primary: #000;
+        --theme-text-secondary: #333;
+        --theme-card-bg: rgba(255, 255, 255, 1);
+        --theme-shadow: rgba(0, 0, 0, 0.5);
+    }
+    
+    .wish-card,
+    .welcome-card,
+    .modal-content {
+        border: 2px solid #000;
+    }
+    
+    .btn {
+        border: 2px solid #000;
+    }
+}

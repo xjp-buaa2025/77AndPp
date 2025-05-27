@@ -1,0 +1,414 @@
+/* 增强版样式 - 可以通过 <link> 标签引入到现有 HTML 中 */
+
+/* 更炫酷的星空背景 */
+.enhanced-stars {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: -1;
+    background: 
+        radial-gradient(2px 2px at 20px 30px, #eee, transparent),
+        radial-gradient(2px 2px at 40px 70px, rgba(255,255,255,0.8), transparent),
+        radial-gradient(1px 1px at 90px 40px, #fff, transparent),
+        radial-gradient(1px 1px at 130px 80px, rgba(255,255,255,0.6), transparent),
+        radial-gradient(2px 2px at 160px 30px, #ddd, transparent);
+    background-repeat: repeat;
+    background-size: 200px 100px;
+    animation: starfield-move 20s linear infinite;
+}
+
+@keyframes starfield-move {
+    from { transform: translateY(0); }
+    to { transform: translateY(-100px); }
+}
+
+/* 流星效果 */
+.meteor {
+    position: absolute;
+    height: 2px;
+    background: linear-gradient(90deg, #fff, transparent);
+    border-radius: 999px;
+    filter: drop-shadow(0 0 6px #fff);
+    animation: meteor-fall 3s linear infinite;
+}
+
+@keyframes meteor-fall {
+    from {
+        transform: rotate(315deg) translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: rotate(315deg) translateX(300px);
+        opacity: 0;
+    }
+}
+
+/* 增强心愿卡片悬浮效果 */
+.wish-card-enhanced {
+    position: relative;
+    overflow: hidden;
+    transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.wish-card-enhanced::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+    transition: left 0.5s;
+}
+
+.wish-card-enhanced:hover::before {
+    left: 100%;
+}
+
+.wish-card-enhanced:hover {
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 
+        0 20px 40px rgba(0, 0, 0, 0.15),
+        0 0 20px rgba(255, 107, 157, 0.3);
+}
+
+/* 脉动边框效果 */
+.wish-card-pulse {
+    position: relative;
+}
+
+.wish-card-pulse::after {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    background: linear-gradient(45deg, #FF6B9D, #4ECDC4, #FF6B9D);
+    border-radius: 22px;
+    z-index: -1;
+    opacity: 0;
+    animation: pulse-border 2s ease-in-out infinite;
+}
+
+@keyframes pulse-border {
+    0%, 100% { opacity: 0; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.05); }
+}
+
+/* 3D 翻转卡片效果 */
+.wish-card-3d {
+    perspective: 1000px;
+}
+
+.wish-card-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    text-align: center;
+    transition: transform 0.6s;
+    transform-style: preserve-3d;
+}
+
+.wish-card-3d:hover .wish-card-inner {
+    transform: rotateY(180deg);
+}
+
+.wish-card-front, .wish-card-back {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    backface-visibility: hidden;
+    border-radius: 20px;
+    padding: 25px;
+}
+
+.wish-card-back {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    transform: rotateY(180deg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+}
+
+/* 彩虹边框动画 */
+.rainbow-border {
+    position: relative;
+    background: linear-gradient(45deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3);
+    background-size: 400% 400%;
+    animation: rainbow-animation 4s ease infinite;
+    padding: 3px;
+    border-radius: 23px;
+}
+
+@keyframes rainbow-animation {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+}
+
+.rainbow-border .wish-card {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 20px;
+    margin: 0;
+}
+
+/* 玻璃态效果增强 */
+.glass-effect {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 
+        0 8px 32px 0 rgba(31, 38, 135, 0.37),
+        inset 0 1px 0 rgba(255, 255, 255, 0.5),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* 浮动粒子效果 */
+.floating-particles {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: -1;
+}
+
+.particle {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.6);
+    border-radius: 50%;
+    animation: float-up 6s linear infinite;
+}
+
+@keyframes float-up {
+    0% {
+        opacity: 0;
+        transform: translateY(100vh) rotate(0deg);
+    }
+    10% {
+        opacity: 1;
+    }
+    90% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-100px) rotate(360deg);
+    }
+}
+
+/* 心愿状态指示器增强 */
+.wish-status-enhanced {
+    position: relative;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    overflow: hidden;
+}
+
+.wish-status-enhanced::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    background: rgba(247, 215, 148, 0.5);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    transition: all 0.3s ease;
+}
+
+.wish-status-enhanced:hover::before {
+    width: 100%;
+    height: 100%;
+}
+
+.wish-status-enhanced.completed::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-weight: bold;
+    font-size: 12px;
+}
+
+/* 进度条效果 */
+.progress-ring {
+    width: 60px;
+    height: 60px;
+    transform: rotate(-90deg);
+}
+
+.progress-ring__circle {
+    stroke: #e6e6e6;
+    stroke-width: 4;
+    fill: transparent;
+    r: 26;
+    cx: 30;
+    cy: 30;
+}
+
+.progress-ring__progress {
+    stroke: var(--golden);
+    stroke-width: 4;
+    stroke-linecap: round;
+    fill: transparent;
+    r: 26;
+    cx: 30;
+    cy: 30;
+    stroke-dasharray: 164;
+    stroke-dashoffset: 164;
+    transition: stroke-dashoffset 0.5s ease-in-out;
+}
+
+/* 文字打字机效果 */
+.typewriter {
+    overflow: hidden;
+    border-right: 0.15em solid var(--golden);
+    white-space: nowrap;
+    margin: 0 auto;
+    letter-spacing: 0.05em;
+    animation: 
+        typing 3.5s steps(40, end),
+        blink-caret 0.75s step-end infinite;
+}
+
+@keyframes typing {
+    from { width: 0; }
+    to { width: 100%; }
+}
+
+@keyframes blink-caret {
+    from, to { border-color: transparent; }
+    50% { border-color: var(--golden); }
+}
+
+/* 霓虹灯效果 */
+.neon-text {
+    color: #fff;
+    text-shadow:
+        0 0 5px #fff,
+        0 0 10px #fff,
+        0 0 15px #fff,
+        0 0 20px #ff006e,
+        0 0 35px #ff006e,
+        0 0 40px #ff006e,
+        0 0 50px #ff006e,
+        0 0 75px #ff006e;
+    animation: neon-flicker 1.5s infinite alternate;
+}
+
+@keyframes neon-flicker {
+    0%, 18%, 22%, 25%, 53%, 57%, 100% {
+        text-shadow:
+            0 0 5px #fff,
+            0 0 10px #fff,
+            0 0 15px #fff,
+            0 0 20px #ff006e,
+            0 0 35px #ff006e,
+            0 0 40px #ff006e,
+            0 0 50px #ff006e,
+            0 0 75px #ff006e;
+    }
+    20%, 24%, 55% {
+        text-shadow: none;
+    }
+}
+
+/* 水波纹点击效果 */
+.ripple-effect {
+    position: relative;
+    overflow: hidden;
+}
+
+.ripple-effect::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.6);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s, height 0.6s;
+}
+
+.ripple-effect:active::before {
+    width: 300px;
+    height: 300px;
+}
+
+/* 渐变边框动画 */
+.animated-gradient-border {
+    position: relative;
+    background: linear-gradient(45deg, #ff006e, #fb5607, #ffbe0b, #8338ec, #3a86ff);
+    background-size: 300% 300%;
+    border-radius: 25px;
+    padding: 2px;
+    animation: gradient-shift 3s ease infinite;
+}
+
+@keyframes gradient-shift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+/* 悬浮阴影效果 */
+.floating-shadow {
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.floating-shadow:hover {
+    box-shadow: 
+        0 14px 28px rgba(0,0,0,0.25), 
+        0 10px 10px rgba(0,0,0,0.22),
+        0 0 20px rgba(255, 107, 157, 0.3);
+    transform: translateY(-5px);
+}
+
+/* 彩色阴影 */
+.colorful-shadow {
+    box-shadow: 
+        0 0 20px rgba(255, 107, 157, 0.3),
+        0 0 40px rgba(78, 205, 196, 0.2),
+        0 0 60px rgba(247, 215, 148, 0.1);
+}
+
+/* 响应式增强 */
+@media (max-width: 768px) {
+    .wish-card-enhanced:hover {
+        transform: translateY(-4px) scale(1.01);
+    }
+    
+    .floating-shadow:hover {
+        transform: translateY(-3px);
+    }
+}
+
+/* 暗色模式支持 */
+@media (prefers-color-scheme: dark) {
+    .glass-effect {
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .wish-card-enhanced {
+        background: rgba(30, 30, 30, 0.9);
+        color: #e0e0e0;
+    }
+}
