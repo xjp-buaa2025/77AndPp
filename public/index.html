@@ -602,9 +602,9 @@
                     <div class="planet-icon">
                         <i class="fas fa-globe-americas"></i>
                     </div>
-                    <h1 class="welcome-title">欢迎回到我们的小星球</h1>
+                    <h1 class="welcome-title">欢迎回到你们的小星球</h1>
                     <p class="welcome-subtitle">
-                        在这个专属于77和PP的小世界里<br>
+                        在这个专属于你们的小世界里<br>
                         每一个心愿都值得被珍藏<br>
                         每一份美好都值得被记录
                     </p>
@@ -640,7 +640,7 @@
                 <div class="empty-icon">
                     <i class="fas fa-star"></i>
                 </div>
-                <div class="empty-text">这里还空着，等我们一起填满～</div>
+                <div class="empty-text">这里还空着，等你们一起填满～</div>
                 <div class="empty-subtext">今天也来许个小愿望吧</div>
                 <button class="btn btn-primary" onclick="showAddWishModal()">
                     开始许愿 <i class="fas fa-magic" style="margin-left: 8px;"></i>
@@ -703,16 +703,23 @@
             const hostname = window.location.hostname;
             const protocol = window.location.protocol;
             
+            // 调试信息
+            console.log('🌍 当前域名:', hostname);
+            console.log('🔗 协议:', protocol);
+            
             if (hostname === 'localhost' || hostname === '127.0.0.1') {
                 // 本地开发环境
+                console.log('🏠 检测到本地环境');
                 return 'http://localhost:3000/api';
             } else {
                 // 生产环境（Vercel 或其他部署环境）
+                console.log('🌐 检测到生产环境');
                 return `${protocol}//${hostname}/api`;
             }
         };
 
         const API_BASE_URL = getApiBaseUrl();
+        console.log('🎯 使用API地址:', API_BASE_URL);
         
         // 类型图标映射
         const typeIcons = {
@@ -747,11 +754,17 @@
                 indicator.style.background = 'rgba(46, 204, 113, 0.8)';
             }
             
-            // 3秒后隐藏指示器
+            // 5秒后淡化指示器
             setTimeout(() => {
                 indicator.style.opacity = '0.3';
                 indicator.style.fontSize = '0.7rem';
-            }, 3000);
+                indicator.style.pointerEvents = 'none';
+            }, 5000);
+            
+            // 点击指示器显示详细信息
+            indicator.addEventListener('click', () => {
+                alert(`环境信息:\n域名: ${hostname}\nAPI地址: ${API_BASE_URL}`);
+            });
         }
 
         // 创建星空背景
@@ -881,17 +894,31 @@
         // 切换心愿完成状态
         async function toggleWishStatus(wishId) {
             const wish = wishes.find(w => w.id === wishId);
-            if (!wish) return;
+            if (!wish) {
+                console.error('❌ 找不到心愿:', wishId);
+                return;
+            }
 
             const newStatus = !wish.completed;
+            console.log(`🔄 切换心愿 ${wishId} 状态: ${wish.completed} -> ${newStatus}`);
+            
+            // 确保发送的数据类型正确
             const updates = {
-                completed: newStatus,
+                completed: Boolean(newStatus), // 显式转换为布尔值
                 completedAt: newStatus ? new Date().toISOString() : null
             };
 
+            console.log('📤 发送更新数据:', updates);
+            console.log('📤 数据类型检查:', {
+                completed: typeof updates.completed,
+                completedAt: typeof updates.completedAt
+            });
+
             try {
-                await updateWishInDatabase(wishId, updates);
+                const response = await updateWishInDatabase(wishId, updates);
+                console.log('📥 更新响应:', response);
                 
+                // 更新本地数据
                 wish.completed = newStatus;
                 wish.completedAt = updates.completedAt;
 
@@ -904,7 +931,7 @@
 
                 updateWishlistDisplay();
             } catch (error) {
-                console.error('更新心愿状态失败:', error);
+                console.error('❌ 更新心愿状态失败:', error);
                 showMessage(error.message || '更新失败，请稍后再试', 'error');
             }
         }
@@ -1054,8 +1081,14 @@
         // API 调用函数
         async function apiCall(endpoint, options = {}) {
             try {
-                console.log(`🌐 API调用: ${API_BASE_URL}${endpoint}`);
-                const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+                const url = `${API_BASE_URL}${endpoint}`;
+                console.log(`🌐 API调用: ${options.method || 'GET'} ${url}`);
+                
+                if (options.body) {
+                    console.log('📦 请求数据:', options.body);
+                }
+                
+                const response = await fetch(url, {
                     headers: {
                         'Content-Type': 'application/json',
                         ...options.headers
@@ -1063,7 +1096,10 @@
                     ...options
                 });
 
+                console.log(`📡 响应状态: ${response.status} ${response.statusText}`);
+
                 const data = await response.json();
+                console.log('📋 响应数据:', data);
                 
                 if (!response.ok) {
                     throw new Error(data.message || `API请求失败 (${response.status})`);
@@ -1071,7 +1107,7 @@
                 
                 return data;
             } catch (error) {
-                console.error('API调用失败:', error);
+                console.error('❌ API调用失败:', error);
                 // 如果API调用失败，回退到本地存储
                 return handleOfflineMode(endpoint, options);
             }
@@ -1160,18 +1196,21 @@
         // 更新心愿到数据库
         async function updateWishInDatabase(wishId, updates) {
             try {
+                console.log(`🔄 更新心愿 ${wishId}:`, updates);
+                
                 const response = await apiCall(`/wishes/${wishId}`, {
                     method: 'PUT',
                     body: JSON.stringify(updates)
                 });
 
                 if (response.success) {
+                    console.log('✅ 心愿更新成功:', response.data);
                     return response.data;
                 } else {
                     throw new Error(response.message);
                 }
             } catch (error) {
-                console.error('更新心愿失败:', error);
+                console.error('❌ 更新心愿失败:', error);
                 throw error;
             }
         }

@@ -1,587 +1,310 @@
-const express = require('express');
-const router = express.Router();
-const { pool } = require('../lib/db');
-const { authenticate } = require('../lib/auth');
-const { 
-  successResponse, 
-  errorResponse, 
-  handleError, 
-  validateRequiredFields,
-  sanitizeString,
-  isValidDate,
-  formatDate,
-  getFriendlyDate,
-  generatePagination
-} = require('../lib/utils');
+const { Pool } = require('pg');
 
-// 获取心愿列表
-router.get('/', authenticate, async (req, res) => {
+// 创建数据库连接池
+let pool;
+
+function getPool() {
+  if (!pool) {
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_rzq9Uln8hdDQ@ep-misty-wind-a5wyvdm8-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require',
+      ssl: {
+        rejectUnauthorized: false
+      },
+      max: 1,
+      idleTimeoutMillis: 10000,
+      connectionTimeoutMillis: 5000,
+    });
+  }
+  return pool;
+}
+
+export default async function handler(req, res) {
+  console.log(`🌐 API调用: ${req.method} ${req.url}`);
+  
+  // 设置 CORS 头
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Content-Type', 'application/json');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  try {
+    const dbPool = getPool();
+    
+    // 解析 URL 路径
+    const { query } = req;
+    const pathSegments = req.url.split('/').filter(Boolean);
+    
+    // 如果是 /api/wishes/123 这样的路径
+    if (pathSegments.length >= 3 && pathSegments[2]) {
+      const wishId = parseInt(pathSegments[2]);
+      if (req.method === 'PUT') {
+        return await updateWish(req, res, dbPool, wishId);
+      } else if (req.method === 'DELETE') {
+        return await deleteWish(req, res, dbPool, wishId);
+      }
+    }
+    
+    // 基本的 /api/wishes 路径
+    if (req.method === 'GET') {
+      return await getWishes(req, res, dbPool);
+    } else if (req.method === 'POST') {
+      return await createWish(req, res, dbPool);
+    }
+    
+    return res.status(405).json({
+      success: false,
+      message: `方法 ${req.method} 不被允许`
+    });
+    
+  } catch (error) {
+    console.error('❌ API错误:', error);
+    
+    // 确保返回 JSON 格式的错误
+    return res.status(500).json({
+      success: false,
+      message: error.message || '服务器内部错误',
+      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+}
+
+// 初始化数据库表
+async function ensureTable(pool) {
   try {
     const client = await pool.connect();
     
-    try {
-      // 解析查询参数
-      const {
-        page = 1,
-        limit = 20,
-        status = 'all', // all, completed, pending
-        type = 'all',   // all, 旅行, 美食, 电影, 礼物, 约会, 其他
-        sort = 'created_desc', // created_desc, created_asc, title_asc, title_desc, target_date_asc, target_date_desc
-        search = ''
-      } = req.query;
-
-      // 构建查询条件
-      let whereConditions = ['couple_code = $1'];
-      let queryParams = [req.coupleCode];
-      let paramIndex = 2;
-
-      // 状态过滤
-      if (status === 'completed') {
-        whereConditions.push('completed = true');
-      } else if (status === 'pending') {
-        whereConditions.push('completed = false');
-      }
-
-      // 类型过滤
-      if (type !== 'all') {
-        whereConditions.push(`wish_type = $${paramIndex}`);
-        queryParams.push(type);
-        paramIndex++;
-      }
-
-      // 搜索过滤
-      if (search && search.trim()) {
-        whereConditions.push(`(title ILIKE $${paramIndex} OR description ILIKE $${paramIndex})`);
-        queryParams.push(`%${search.trim()}%`);
-        paramIndex++;
-      }
-
-      // 构建排序
-      let orderBy = 'created_at DESC';
-      switch (sort) {
-        case 'created_asc':
-          orderBy = 'created_at ASC';
-          break;
-        case 'title_asc':
-          orderBy = 'title ASC';
-          break;
-        case 'title_desc':
-          orderBy = 'title DESC';
-          break;
-        case 'target_date_asc':
-          orderBy = 'target_date ASC NULLS LAST';
-          break;
-        case 'target_date_desc':
-          orderBy = 'target_date DESC NULLS LAST';
-          break;
-        default:
-          orderBy = 'completed ASC, created_at DESC'; // 未完成的在前面
-      }
-
-      // 获取总数
-      const countQuery = `
-        SELECT COUNT(*) as total
-        FROM wishes 
-        WHERE ${whereConditions.join(' AND ')}
+    // 检查表是否存在
+    const tableCheck = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'wishes'
+      );
+    `);
+    
+    if (!tableCheck.rows[0].exists) {
+      const createTableQuery = `
+        CREATE TABLE wishes (
+          id SERIAL PRIMARY KEY,
+          title VARCHAR(255) NOT NULL,
+          description TEXT,
+          wish_type VARCHAR(50),
+          target_date DATE,
+          completed BOOLEAN DEFAULT FALSE,
+          completed_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          type VARCHAR(50) NOT NULL
+        )
       `;
       
-      const countResult = await client.query(countQuery, queryParams);
-      const total = parseInt(countResult.rows[0].total);
-
-      // 分页信息
-      const pagination = generatePagination(page, limit, total);
-
-      // 获取心愿列表
-      const wishesQuery = `
-        SELECT 
-          id,
-          title,
-          description,
-          wish_type,
-          target_date,
-          completed,
-          completed_at,
-          created_by,
-          created_at,
-          updated_at
-        FROM wishes 
-        WHERE ${whereConditions.join(' AND ')}
-        ORDER BY ${orderBy}
-        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
-      `;
-
-      queryParams.push(pagination.pageSize, pagination.offset);
-      
-      const wishesResult = await client.query(wishesQuery, queryParams);
-
-      // 格式化心愿数据
-      const wishes = wishesResult.rows.map(wish => ({
-        id: wish.id,
-        title: wish.title,
-        description: wish.description,
-        type: wish.wish_type,
-        targetDate: wish.target_date,
-        targetDateFormatted: wish.target_date ? formatDate(wish.target_date, 'MM月DD日') : null,
-        targetDateFriendly: wish.target_date ? getFriendlyDate(wish.target_date) : null,
-        completed: wish.completed,
-        completedAt: wish.completed_at,
-        completedAtFormatted: wish.completed_at ? formatDate(wish.completed_at, 'MM月DD日') : null,
-        completedAtFriendly: wish.completed_at ? getFriendlyDate(wish.completed_at) : null,
-        createdBy: wish.created_by,
-        createdAt: wish.created_at,
-        createdAtFormatted: formatDate(wish.created_at, 'MM月DD日'),
-        createdAtFriendly: getFriendlyDate(wish.created_at),
-        updatedAt: wish.updated_at,
-        // 添加一些计算字段
-        isOverdue: wish.target_date && !wish.completed && new Date(wish.target_date) < new Date(),
-        daysUntilTarget: wish.target_date && !wish.completed 
-          ? Math.ceil((new Date(wish.target_date) - new Date()) / (1000 * 60 * 60 * 24))
-          : null
-      }));
-
-      const responseData = {
-        wishes,
-        pagination: {
-          ...pagination,
-          totalItems: total
-        },
-        filters: {
-          status,
-          type,
-          search,
-          sort
-        }
-      };
-
-      return res.status(200).json(successResponse(
-        responseData,
-        '获取心愿列表成功'
-      ));
-
-    } finally {
-      client.release();
+      await client.query(createTableQuery);
+      console.log('✅ 数据库表创建成功');
     }
-
+    
+    client.release();
   } catch (error) {
-    return handleError(error, res, '获取心愿列表失败');
+    console.error('❌ 数据库表检查/创建失败:', error);
+    throw error;
   }
-});
+}
+
+// 获取所有心愿
+async function getWishes(req, res, pool) {
+  try {
+    await ensureTable(pool);
+    
+    const client = await pool.connect();
+    const result = await client.query(
+      'SELECT * FROM wishes ORDER BY completed ASC, created_at DESC'
+    );
+    client.release();
+    
+    const wishes = result.rows.map(row => ({
+      id: row.id,
+      title: row.title,
+      type: row.type || row.wish_type || '其他',
+      description: row.description,
+      targetDate: row.target_date,
+      completed: row.completed,
+      completedAt: row.completed_at,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }));
+
+    console.log(`✅ 成功获取 ${wishes.length} 个心愿`);
+    
+    return res.status(200).json({
+      success: true,
+      data: { wishes }
+    });
+  } catch (error) {
+    console.error('❌ 获取心愿列表错误:', error);
+    throw error;
+  }
+}
 
 // 创建新心愿
-router.post('/create', authenticate, async (req, res) => {
+async function createWish(req, res, pool) {
   try {
-    // 验证请求数据
-    const validation = validateRequiredFields(req.body, ['title']);
-    if (!validation.isValid) {
-      return res.status(400).json(errorResponse(validation.message, 'VALIDATION_ERROR'));
+    const { title, type, description, targetDate } = req.body;
+
+    if (!title || !type) {
+      return res.status(400).json({
+        success: false,
+        message: '标题和类型是必填项'
+      });
     }
 
-    const title = sanitizeString(req.body.title, 200);
-    const description = sanitizeString(req.body.description, 1000, true);
-    const wishType = sanitizeString(req.body.wishType, 50) || '其他';
-    const targetDate = req.body.targetDate;
-    const createdBy = sanitizeString(req.body.createdBy, 100, true);
-
-    // 验证标题
-    if (!title || title.length === 0) {
-      return res.status(400).json(errorResponse(
-        '请填写愿望标题哦～', 
-        'EMPTY_TITLE'
-      ));
-    }
-
-    // 验证心愿类型
-    const validTypes = ['旅行', '美食', '电影', '礼物', '约会', '其他'];
-    if (!validTypes.includes(wishType)) {
-      return res.status(400).json(errorResponse(
-        '无效的心愿类型', 
-        'INVALID_WISH_TYPE'
-      ));
-    }
-
-    // 验证目标日期（如果提供）
-    if (targetDate && !isValidDate(targetDate)) {
-      return res.status(400).json(errorResponse(
-        '请选择有效的目标日期', 
-        'INVALID_TARGET_DATE'
-      ));
-    }
-
-    const client = await pool.connect();
+    await ensureTable(pool);
     
-    try {
-      // 开始事务
-      await client.query('BEGIN');
+    const client = await pool.connect();
+    const insertQuery = `
+      INSERT INTO wishes (title, description, wish_type, target_date, type) 
+      VALUES ($1, $2, $3, $4, $5) 
+      RETURNING *
+    `;
+    
+    const values = [
+      title, 
+      description || null,
+      type,
+      targetDate || null,
+      type
+    ];
 
-      try {
-        // 创建新心愿
-        const insertQuery = `
-          INSERT INTO wishes (
-            couple_code, 
-            title, 
-            description, 
-            wish_type, 
-            target_date,
-            created_by,
-            created_at,
-            updated_at
-          ) 
-          VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) 
-          RETURNING *
-        `;
-        
-        const result = await client.query(insertQuery, [
-          req.coupleCode,
-          title,
-          description || null,
-          wishType,
-          targetDate || null,
-          createdBy || null
-        ]);
+    const result = await client.query(insertQuery, values);
+    client.release();
 
-        const newWish = result.rows[0];
+    const wish = result.rows[0];
+    const formattedWish = {
+      id: wish.id,
+      title: wish.title,
+      type: wish.type || wish.wish_type,
+      description: wish.description,
+      targetDate: wish.target_date,
+      completed: wish.completed,
+      completedAt: wish.completed_at,
+      createdAt: wish.created_at,
+      updatedAt: wish.updated_at
+    };
 
-        // 记录活动日志
-        await client.query(
-          `INSERT INTO activity_logs (couple_code, action_type, action_description) 
-           VALUES ($1, $2, $3)`,
-          [req.coupleCode, 'create_wish', `创建了新心愿：${title}`]
-        );
+    console.log(`✅ 成功创建心愿: ${title}`);
 
-        // 提交事务
-        await client.query('COMMIT');
-
-        // 格式化返回数据
-        const responseData = {
-          id: newWish.id,
-          title: newWish.title,
-          description: newWish.description,
-          type: newWish.wish_type,
-          targetDate: newWish.target_date,
-          targetDateFormatted: newWish.target_date ? formatDate(newWish.target_date, 'MM月DD日') : null,
-          targetDateFriendly: newWish.target_date ? getFriendlyDate(newWish.target_date) : null,
-          completed: newWish.completed,
-          completedAt: newWish.completed_at,
-          createdBy: newWish.created_by,
-          createdAt: newWish.created_at,
-          createdAtFormatted: formatDate(newWish.created_at, 'MM月DD日'),
-          createdAtFriendly: getFriendlyDate(newWish.created_at),
-          updatedAt: newWish.updated_at,
-          // 计算字段
-          daysUntilTarget: newWish.target_date 
-            ? Math.ceil((new Date(newWish.target_date) - new Date()) / (1000 * 60 * 60 * 24))
-            : null
-        };
-
-        return res.status(201).json(successResponse(
-          responseData,
-          '愿望已锁定！两个心一起想的事，完成起来也更快乐～'
-        ));
-
-      } catch (insertError) {
-        await client.query('ROLLBACK');
-        throw insertError;
-      }
-
-    } finally {
-      client.release();
-    }
-
+    return res.status(201).json({
+      success: true,
+      data: formattedWish
+    });
   } catch (error) {
-    return handleError(error, res, '创建心愿失败');
+    console.error('❌ 创建心愿错误:', error);
+    throw error;
   }
-});
+}
 
 // 更新心愿
-router.put('/update/:wishId', authenticate, async (req, res) => {
+async function updateWish(req, res, pool, wishId) {
   try {
-    const wishId = req.params.wishId;
-    
-    if (!wishId || isNaN(parseInt(wishId))) {
-      return res.status(400).json(errorResponse(
-        '无效的心愿ID', 
-        'INVALID_WISH_ID'
-      ));
-    }
+    const updates = req.body;
+
+    const updateFields = [];
+    const values = [];
+    let paramCount = 1;
+
+    Object.keys(updates).forEach(key => {
+      if (updates[key] !== undefined) {
+        let dbField = key;
+        if (key === 'targetDate') dbField = 'target_date';
+        if (key === 'completedAt') dbField = 'completed_at';
+        if (key === 'updatedAt') dbField = 'updated_at';
+        if (key === 'type') {
+          updateFields.push(`type = ${paramCount}`);
+          updateFields.push(`wish_type = ${paramCount}`);
+          values.push(updates[key]);
+          paramCount++;
+          return;
+        }
+
+        updateFields.push(`${dbField} = ${paramCount}`);
+        values.push(updates[key]);
+        paramCount++;
+      }
+    });
+
+    updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
+    values.push(wishId);
 
     const client = await pool.connect();
-    
-    try {
-      // 检查心愿是否存在且属于当前情侣
-      const checkQuery = `
-        SELECT 
-          id, title, completed, wish_type, target_date, created_at
-        FROM wishes 
-        WHERE id = $1 AND couple_code = $2
-      `;
-      
-      const checkResult = await client.query(checkQuery, [wishId, req.coupleCode]);
+    const query = `
+      UPDATE wishes 
+      SET ${updateFields.join(', ')}
+      WHERE id = ${paramCount}
+      RETURNING *
+    `;
 
-      if (checkResult.rows.length === 0) {
-        return res.status(404).json(errorResponse(
-          '心愿不存在或不属于你们', 
-          'WISH_NOT_FOUND'
-        ));
-      }
+    const result = await client.query(query, values);
+    client.release();
 
-      // 准备更新字段
-      const updates = {};
-      const updateFields = [];
-      const queryParams = [wishId, req.coupleCode];
-      let paramIndex = 3;
-
-      // 处理完成状态更新
-      if ('completed' in req.body) {
-        const completed = Boolean(req.body.completed);
-        updates.completed = completed;
-        updateFields.push(`completed = ${paramIndex}`);
-        queryParams.push(completed);
-        paramIndex++;
-        
-        // 如果标记为完成，设置完成时间；如果取消完成，清除完成时间
-        if (completed) {
-          updateFields.push(`completed_at = CURRENT_TIMESTAMP`);
-        } else {
-          updateFields.push(`completed_at = NULL`);
-        }
-      }
-
-      // 处理其他字段更新
-      if ('title' in req.body) {
-        const title = sanitizeString(req.body.title, 200);
-        if (!title || title.length === 0) {
-          return res.status(400).json(errorResponse(
-            '愿望标题不能为空', 
-            'EMPTY_TITLE'
-          ));
-        }
-        updates.title = title;
-        updateFields.push(`title = ${paramIndex}`);
-        queryParams.push(title);
-        paramIndex++;
-      }
-
-      if ('description' in req.body) {
-        const description = sanitizeString(req.body.description, 1000, true);
-        updates.description = description;
-        updateFields.push(`description = ${paramIndex}`);
-        queryParams.push(description || null);
-        paramIndex++;
-      }
-
-      if ('wishType' in req.body) {
-        const wishType = sanitizeString(req.body.wishType, 50) || '其他';
-        const validTypes = ['旅行', '美食', '电影', '礼物', '约会', '其他'];
-        if (!validTypes.includes(wishType)) {
-          return res.status(400).json(errorResponse(
-            '无效的心愿类型', 
-            'INVALID_WISH_TYPE'
-          ));
-        }
-        updates.wishType = wishType;
-        updateFields.push(`wish_type = ${paramIndex}`);
-        queryParams.push(wishType);
-        paramIndex++;
-      }
-
-      if ('targetDate' in req.body) {
-        const targetDate = req.body.targetDate;
-        if (targetDate && !isValidDate(targetDate)) {
-          return res.status(400).json(errorResponse(
-            '请选择有效的目标日期', 
-            'INVALID_TARGET_DATE'
-          ));
-        }
-        updates.targetDate = targetDate;
-        updateFields.push(`target_date = ${paramIndex}`);
-        queryParams.push(targetDate || null);
-        paramIndex++;
-      }
-
-      // 如果没有任何更新字段
-      if (updateFields.length === 0) {
-        return res.status(400).json(errorResponse(
-          '没有提供要更新的字段', 
-          'NO_UPDATE_FIELDS'
-        ));
-      }
-
-      // 开始事务
-      await client.query('BEGIN');
-
-      try {
-        // 添加更新时间
-        updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
-
-        // 执行更新
-        const updateQuery = `
-          UPDATE wishes 
-          SET ${updateFields.join(', ')}
-          WHERE id = $1 AND couple_code = $2
-          RETURNING *
-        `;
-        
-        const updateResult = await client.query(updateQuery, queryParams);
-        const updatedWish = updateResult.rows[0];
-
-        // 记录活动日志
-        let actionDescription = '';
-        if ('completed' in req.body) {
-          if (req.body.completed) {
-            actionDescription = `完成了心愿：${updatedWish.title}`;
-          } else {
-            actionDescription = `重新激活了心愿：${updatedWish.title}`;
-          }
-        } else {
-          actionDescription = `更新了心愿：${updatedWish.title}`;
-        }
-
-        await client.query(
-          `INSERT INTO activity_logs (couple_code, action_type, action_description) 
-           VALUES ($1, $2, $3)`,
-          [req.coupleCode, 'update_wish', actionDescription]
-        );
-
-        // 提交事务
-        await client.query('COMMIT');
-
-        // 格式化返回数据
-        const responseData = {
-          id: updatedWish.id,
-          title: updatedWish.title,
-          description: updatedWish.description,
-          type: updatedWish.wish_type,
-          targetDate: updatedWish.target_date,
-          targetDateFormatted: updatedWish.target_date ? formatDate(updatedWish.target_date, 'MM月DD日') : null,
-          targetDateFriendly: updatedWish.target_date ? getFriendlyDate(updatedWish.target_date) : null,
-          completed: updatedWish.completed,
-          completedAt: updatedWish.completed_at,
-          completedAtFormatted: updatedWish.completed_at ? formatDate(updatedWish.completed_at, 'MM月DD日') : null,
-          completedAtFriendly: updatedWish.completed_at ? getFriendlyDate(updatedWish.completed_at) : null,
-          createdBy: updatedWish.created_by,
-          createdAt: updatedWish.created_at,
-          createdAtFormatted: formatDate(updatedWish.created_at, 'MM月DD日'),
-          createdAtFriendly: getFriendlyDate(updatedWish.created_at),
-          updatedAt: updatedWish.updated_at,
-          // 计算字段
-          isOverdue: updatedWish.target_date && !updatedWish.completed && new Date(updatedWish.target_date) < new Date(),
-          daysUntilTarget: updatedWish.target_date && !updatedWish.completed 
-            ? Math.ceil((new Date(updatedWish.target_date) - new Date()) / (1000 * 60 * 60 * 24))
-            : null,
-          // 更新信息
-          wasStatusChanged: 'completed' in req.body,
-          wasCompleted: 'completed' in req.body && req.body.completed
-        };
-
-        // 根据更新类型返回不同的消息
-        let message = '心愿更新成功';
-        if ('completed' in req.body) {
-          if (req.body.completed) {
-            message = '愿望达成啦！🎉';
-          } else {
-            message = '心愿重新激活，继续加油！';
-          }
-        }
-
-        return res.status(200).json(successResponse(
-          responseData,
-          message
-        ));
-
-      } catch (updateError) {
-        await client.query('ROLLBACK');
-        throw updateError;
-      }
-
-    } finally {
-      client.release();
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: '心愿未找到'
+      });
     }
 
+    const wish = result.rows[0];
+    const formattedWish = {
+      id: wish.id,
+      title: wish.title,
+      type: wish.type || wish.wish_type,
+      description: wish.description,
+      targetDate: wish.target_date,
+      completed: wish.completed,
+      completedAt: wish.completed_at,
+      createdAt: wish.created_at,
+      updatedAt: wish.updated_at
+    };
+
+    console.log(`✅ 成功更新心愿: ${wishId}`);
+
+    return res.status(200).json({
+      success: true,
+      data: formattedWish
+    });
   } catch (error) {
-    return handleError(error, res, '更新心愿失败');
+    console.error('❌ 更新心愿错误:', error);
+    throw error;
   }
-});
+}
 
 // 删除心愿
-router.delete('/delete/:wishId', authenticate, async (req, res) => {
+async function deleteWish(req, res, pool, wishId) {
   try {
-    const wishId = req.params.wishId;
-    
-    if (!wishId || isNaN(parseInt(wishId))) {
-      return res.status(400).json(errorResponse(
-        '无效的心愿ID', 
-        'INVALID_WISH_ID'
-      ));
-    }
-
     const client = await pool.connect();
-    
-    try {
-      // 开始事务
-      await client.query('BEGIN');
+    const result = await client.query(
+      'DELETE FROM wishes WHERE id = $1 RETURNING id',
+      [wishId]
+    );
+    client.release();
 
-      try {
-        // 先查询心愿信息，用于日志记录
-        const selectQuery = `
-          SELECT id, title, completed, wish_type 
-          FROM wishes 
-          WHERE id = $1 AND couple_code = $2
-        `;
-        
-        const selectResult = await client.query(selectQuery, [wishId, req.coupleCode]);
-
-        if (selectResult.rows.length === 0) {
-          await client.query('ROLLBACK');
-          return res.status(404).json(errorResponse(
-            '心愿不存在或不属于你们', 
-            'WISH_NOT_FOUND'
-          ));
-        }
-
-        const wishToDelete = selectResult.rows[0];
-
-        // 删除心愿
-        const deleteQuery = `
-          DELETE FROM wishes 
-          WHERE id = $1 AND couple_code = $2
-          RETURNING id
-        `;
-        
-        await client.query(deleteQuery, [wishId, req.coupleCode]);
-
-        // 记录活动日志
-        await client.query(
-          `INSERT INTO activity_logs (couple_code, action_type, action_description) 
-           VALUES ($1, $2, $3)`,
-          [req.coupleCode, 'delete_wish', `删除了心愿：${wishToDelete.title}`]
-        );
-
-        // 提交事务
-        await client.query('COMMIT');
-
-        const responseData = {
-          deletedWishId: parseInt(wishId),
-          deletedWishTitle: wishToDelete.title,
-          deletedAt: new Date().toISOString()
-        };
-
-        return res.status(200).json(successResponse(
-          responseData,
-          '心愿已删除'
-        ));
-
-      } catch (deleteError) {
-        await client.query('ROLLBACK');
-        throw deleteError;
-      }
-
-    } finally {
-      client.release();
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: '心愿未找到'
+      });
     }
 
-  } catch (error) {
-    return handleError(error, res, '删除心愿失败');
-  }
-});
+    console.log(`✅ 成功删除心愿: ${wishId}`);
 
-module.exports = router;
+    return res.status(200).json({
+      success: true,
+      message: '心愿删除成功'
+    });
+  } catch (error) {
+    console.error('❌ 删除心愿错误:', error);
+    throw error;
+  }
+}

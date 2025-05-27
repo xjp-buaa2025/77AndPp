@@ -6,46 +6,51 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 数据库连接配置
+// 数据库连接配置 - 建议使用环境变量
 const pool = new Pool({
-  connectionString: 'postgresql://neondb_owner:npg_rzq9Uln8hdDQ@ep-misty-wind-a5wyvdm8-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require',
+  connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_rzq9Uln8hdDQ@ep-misty-wind-a5wyvdm8-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require',
   ssl: {
     rejectUnauthorized: false
   }
 });
 
+// 全局数据库连接状态
+let isDatabaseConnected = false;
+
 // 中间件
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public')); // 静态文件目录
+app.use(express.static('public'));
 
-// 创建心愿表（如果不存在）
+// 创建 ourwish 表（如果不存在）
 async function initDatabase() {
   try {
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS wishes (
+      CREATE TABLE IF NOT EXISTS ourwish (
         id SERIAL PRIMARY KEY,
         title VARCHAR(255) NOT NULL,
-        type VARCHAR(50) NOT NULL,
+        wish_type VARCHAR(50) NOT NULL,
         description TEXT,
         target_date DATE,
-        completed BOOLEAN DEFAULT FALSE,
-        completed_at TIMESTAMP,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        is_completed BOOLEAN DEFAULT FALSE,
+        completed_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       )
     `);
-    console.log('数据库表初始化成功');
+    console.log('✅ ourwish 表初始化成功');
   } catch (error) {
-    console.error('数据库初始化错误:', error);
+    console.error('❌ 数据库初始化错误:', error);
   }
 }
 
-// 获取所有心愿
+// 获取所有心愿 - 使用 ourwish 表
 app.get('/api/wishes', async (req, res) => {
   try {
-    // 如果数据库未连接，返回空数组
+    console.log('📋 获取心愿列表请求');
+    
     if (!isDatabaseConnected) {
+      console.log('⚠️ 数据库未连接，返回空列表');
       return res.json({
         success: true,
         data: { wishes: [] }
@@ -53,19 +58,22 @@ app.get('/api/wishes', async (req, res) => {
     }
 
     const result = await pool.query(
-      'SELECT * FROM wishes ORDER BY completed ASC, created_at DESC'
+      'SELECT * FROM ourwish ORDER BY is_completed ASC, created_at DESC'
     );
     
+    console.log(`📊 从 ourwish 表获取到 ${result.rows.length} 条记录`);
+    
+    // 统一字段映射：数据库字段 -> 前端字段
     const wishes = result.rows.map(row => ({
       id: row.id,
       title: row.title,
-      type: row.type || row.wish_type, // 兼容两种字段名
+      type: row.wish_type,              // wish_type -> type
       description: row.description,
-      targetDate: row.target_date,
-      completed: row.completed,
-      completedAt: row.completed_at,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at
+      targetDate: row.target_date,      // target_date -> targetDate
+      completed: row.is_completed,      // is_completed -> completed
+      completedAt: row.completed_at,    // completed_at -> completedAt
+      createdAt: row.created_at,        // created_at -> createdAt
+      updatedAt: row.updated_at         // updated_at -> updatedAt
     }));
 
     res.json({
@@ -73,7 +81,7 @@ app.get('/api/wishes', async (req, res) => {
       data: { wishes }
     });
   } catch (error) {
-    console.error('获取心愿列表错误:', error);
+    console.error('❌ 获取心愿列表错误:', error);
     res.status(500).json({
       success: false,
       message: '获取心愿列表失败'
@@ -81,7 +89,7 @@ app.get('/api/wishes', async (req, res) => {
   }
 });
 
-// 创建新心愿
+// 创建新心愿 - 使用 ourwish 表
 app.post('/api/wishes', async (req, res) => {
   let client;
   try {
@@ -89,6 +97,7 @@ app.post('/api/wishes', async (req, res) => {
     
     const { title, type, description, targetDate } = req.body;
 
+    // 验证必填字段
     if (!title || !type) {
       console.log('❌ 缺少必填字段:', { title: !!title, type: !!type });
       return res.status(400).json({
@@ -97,7 +106,6 @@ app.post('/api/wishes', async (req, res) => {
       });
     }
 
-    // 如果数据库未连接，返回错误
     if (!isDatabaseConnected) {
       console.log('❌ 数据库未连接，无法保存');
       return res.status(503).json({
@@ -106,23 +114,21 @@ app.post('/api/wishes', async (req, res) => {
       });
     }
 
-    // 获取数据库连接
     client = await pool.connect();
     console.log('✅ 获取数据库连接成功');
 
-    // 简化的插入查询
+    // 插入到 ourwish 表
     const insertQuery = `
-      INSERT INTO wishes (title, description, wish_type, target_date, type) 
-      VALUES ($1, $2, $3, $4, $5) 
+      INSERT INTO ourwish (title, wish_type, description, target_date) 
+      VALUES ($1, $2, $3, $4) 
       RETURNING *
     `;
     
     const values = [
       title, 
+      type,                            // 前端 type -> 数据库 wish_type
       description || null,
-      type, // wish_type 字段
-      targetDate || null,
-      type  // type 字段
+      targetDate || null               // 前端 targetDate -> 数据库 target_date
     ];
     
     console.log('🔍 执行SQL:', insertQuery);
@@ -138,13 +144,14 @@ app.post('/api/wishes', async (req, res) => {
     const wish = result.rows[0];
     console.log('📄 插入的数据:', wish);
     
+    // 统一字段映射：数据库字段 -> 前端字段
     const formattedWish = {
       id: wish.id,
       title: wish.title,
-      type: wish.type || wish.wish_type, // 兼容两种字段名
+      type: wish.wish_type,
       description: wish.description,
       targetDate: wish.target_date,
-      completed: wish.completed,
+      completed: wish.is_completed,
       completedAt: wish.completed_at,
       createdAt: wish.created_at,
       updatedAt: wish.updated_at
@@ -176,35 +183,48 @@ app.post('/api/wishes', async (req, res) => {
   }
 });
 
-// 更新心愿
+// 更新心愿 - 使用 ourwish 表
 app.put('/api/wishes/:id', async (req, res) => {
   try {
     const wishId = parseInt(req.params.id);
     const updates = req.body;
+    
+    console.log(`🔄 更新心愿 ${wishId}:`, updates);
 
-    // 构建动态更新查询
+    if (!isDatabaseConnected) {
+      return res.status(503).json({
+        success: false,
+        message: '数据库连接失败，请稍后重试'
+      });
+    }
+
     const updateFields = [];
     const values = [];
     let paramCount = 1;
 
+    // 处理字段映射和数据类型转换
     Object.keys(updates).forEach(key => {
       if (updates[key] !== undefined) {
-        // 转换字段名到数据库格式
         let dbField = key;
+        let value = updates[key];
+        
+        // 前端字段 -> 数据库字段映射
         if (key === 'targetDate') dbField = 'target_date';
+        if (key === 'completed') dbField = 'is_completed';
         if (key === 'completedAt') dbField = 'completed_at';
         if (key === 'updatedAt') dbField = 'updated_at';
-        if (key === 'type') {
-          // 同时更新 type 和 wish_type 字段
-          updateFields.push(`type = ${paramCount}`);
-          updateFields.push(`wish_type = ${paramCount}`);
-          values.push(updates[key]);
-          paramCount++;
-          return;
+        if (key === 'type') dbField = 'wish_type';
+
+        // 数据类型处理
+        if (key === 'completed') {
+          value = Boolean(value);
+        }
+        if (key === 'completedAt' && (value === '' || value === 'null')) {
+          value = null;
         }
 
-        updateFields.push(`${dbField} = ${paramCount}`);
-        values.push(updates[key]);
+        updateFields.push(`${dbField} = $${paramCount}`);
+        values.push(value);
         paramCount++;
       }
     });
@@ -213,12 +233,16 @@ app.put('/api/wishes/:id', async (req, res) => {
     updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
     values.push(wishId);
 
+    // 更新 ourwish 表
     const query = `
-      UPDATE wishes 
+      UPDATE ourwish 
       SET ${updateFields.join(', ')}
-      WHERE id = ${paramCount} AND couple_code = 'DEFAULT_COUPLE'
+      WHERE id = $${paramCount}
       RETURNING *
     `;
+
+    console.log('🔍 执行更新SQL:', query);
+    console.log('🔍 参数值:', values);
 
     const result = await pool.query(query, values);
 
@@ -230,24 +254,29 @@ app.put('/api/wishes/:id', async (req, res) => {
     }
 
     const wish = result.rows[0];
+    console.log('📄 更新后的数据:', wish);
+    
+    // 统一字段映射：数据库字段 -> 前端字段
     const formattedWish = {
       id: wish.id,
       title: wish.title,
-      type: wish.type || wish.wish_type,
+      type: wish.wish_type,
       description: wish.description,
       targetDate: wish.target_date,
-      completed: wish.completed,
+      completed: wish.is_completed,
       completedAt: wish.completed_at,
       createdAt: wish.created_at,
       updatedAt: wish.updated_at
     };
+
+    console.log('✅ 心愿更新成功:', formattedWish);
 
     res.json({
       success: true,
       data: formattedWish
     });
   } catch (error) {
-    console.error('更新心愿错误:', error);
+    console.error('❌ 更新心愿错误:', error);
     res.status(500).json({
       success: false,
       message: '更新心愿失败'
@@ -255,29 +284,41 @@ app.put('/api/wishes/:id', async (req, res) => {
   }
 });
 
-// 删除心愿
+// 删除心愿 - 使用 ourwish 表
 app.delete('/api/wishes/:id', async (req, res) => {
   try {
     const wishId = parseInt(req.params.id);
+    console.log(`🗑️ 删除心愿请求: ${wishId}`);
 
+    if (!isDatabaseConnected) {
+      return res.status(503).json({
+        success: false,
+        message: '数据库连接失败，请稍后重试'
+      });
+    }
+
+    // 从 ourwish 表删除
     const result = await pool.query(
-      'DELETE FROM wishes WHERE id = $1 RETURNING id',
+      'DELETE FROM ourwish WHERE id = $1 RETURNING id',
       [wishId]
     );
 
     if (result.rows.length === 0) {
+      console.log(`❌ 心愿 ${wishId} 未找到`);
       return res.status(404).json({
         success: false,
         message: '心愿未找到'
       });
     }
 
+    console.log(`✅ 心愿 ${wishId} 删除成功`);
+
     res.json({
       success: true,
       message: '心愿删除成功'
     });
   } catch (error) {
-    console.error('删除心愿错误:', error);
+    console.error('❌ 删除心愿错误:', error);
     res.status(500).json({
       success: false,
       message: '删除心愿失败'
@@ -292,7 +333,7 @@ app.get('/', (req, res) => {
 
 // 错误处理中间件
 app.use((err, req, res, next) => {
-  console.error('服务器错误:', err);
+  console.error('❌ 服务器错误:', err);
   res.status(500).json({
     success: false,
     message: '服务器内部错误'
@@ -310,12 +351,25 @@ app.use((req, res) => {
 // 启动服务器
 async function startServer() {
   try {
-    console.log('🚀 正在启动服务器...');
+    console.log('🚀 正在启动心愿管理服务器...');
+    console.log('📊 使用数据库表: ourwish');
     
-    // 首先测试数据库连接
+    // 测试数据库连接
     try {
       const client = await pool.connect();
       console.log('✅ 数据库连接成功');
+      
+      // 测试 ourwish 表是否存在
+      const tableCheck = await client.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = 'ourwish'
+        );
+      `);
+      
+      console.log('📋 ourwish 表存在:', tableCheck.rows[0].exists);
+      
       const result = await client.query('SELECT NOW()');
       console.log('📅 数据库时间:', result.rows[0].now);
       client.release();
@@ -324,24 +378,28 @@ async function startServer() {
       // 初始化数据库表
       await initDatabase();
       
+      // 显示现有数据
+      const countResult = await pool.query('SELECT COUNT(*) as count FROM ourwish');
+      console.log(`📊 ourwish 表中现有 ${countResult.rows[0].count} 条心愿记录`);
+      
     } catch (dbError) {
       console.error('❌ 数据库连接失败:', dbError.message);
       console.log('⚠️ 服务器将以离线模式启动');
       isDatabaseConnected = false;
     }
     
-    // 在 Vercel 环境中不需要 listen
+    // 在非生产环境启动服务器
     if (process.env.NODE_ENV !== 'production') {
       app.listen(PORT, () => {
-        console.log('🎉 服务器启动成功！');
+        console.log('🎉 心愿管理服务器启动成功！');
         console.log(`📍 本地访问: http://localhost:${PORT}`);
         console.log(`📍 API接口: http://localhost:${PORT}/api/wishes`);
-        console.log(`💾 数据库状态: ${isDatabaseConnected ? '✅ 已连接' : '❌ 离线模式'}`);
+        console.log(`💾 数据库状态: ${isDatabaseConnected ? '✅ 已连接到 ourwish 表' : '❌ 离线模式'}`);
         console.log('🔍 调试模式已开启，请查看控制台日志');
       });
     } else {
       console.log('🎉 Vercel 无服务器函数已就绪！');
-      console.log(`💾 数据库状态: ${isDatabaseConnected ? '✅ 已连接' : '❌ 离线模式'}`);
+      console.log(`💾 数据库状态: ${isDatabaseConnected ? '✅ 已连接到 ourwish 表' : '❌ 离线模式'}`);
     }
   } catch (error) {
     console.error('❌ 启动服务器失败:', error);
