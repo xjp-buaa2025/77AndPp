@@ -202,6 +202,7 @@ app.put('/api/wishes/:id', async (req, res) => {
     const values = [];
     let paramCount = 1;
 
+    console.log('更新数据:', updates);
     // 处理字段映射和数据类型转换
 // 处理字段映射和数据类型转换
 Object.keys(updates).forEach(key => {
@@ -229,6 +230,7 @@ Object.keys(updates).forEach(key => {
   }
 });
 
+console.log('最终更新字段:', updateFields);
 
     // 总是更新 updated_at
     updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
