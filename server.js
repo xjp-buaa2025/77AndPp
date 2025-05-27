@@ -203,31 +203,32 @@ app.put('/api/wishes/:id', async (req, res) => {
     let paramCount = 1;
 
     // 处理字段映射和数据类型转换
-    Object.keys(updates).forEach(key => {
-      if (updates[key] !== undefined) {
-        let dbField = key;
-        let value = updates[key];
-        
-        // 前端字段 -> 数据库字段映射
-        if (key === 'targetDate') dbField = 'target_date';
-        if (key === 'completed') dbField = 'is_completed';
-        if (key === 'completedAt') dbField = 'completed_at';
-        if (key === 'updatedAt') dbField = 'updated_at';
-        if (key === 'type') dbField = 'wish_type';
+// 处理字段映射和数据类型转换
+Object.keys(updates).forEach(key => {
+  if (updates[key] !== undefined && key !== 'updatedAt') {  // 忽略 updatedAt 字段
+    let dbField = key;
+    let value = updates[key];
+    
+    // 前端字段 -> 数据库字段映射
+    if (key === 'targetDate') dbField = 'target_date';
+    if (key === 'completed') dbField = 'is_completed';
+    if (key === 'completedAt') dbField = 'completed_at';
+    if (key === 'type') dbField = 'wish_type';
 
-        // 数据类型处理
-        if (key === 'completed') {
-          value = Boolean(value);
-        }
-        if (key === 'completedAt' && (value === '' || value === 'null')) {
-          value = null;
-        }
+    // 数据类型处理
+    if (key === 'completed') {
+      value = Boolean(value);
+    }
+    if (key === 'completedAt' && (value === '' || value === 'null')) {
+      value = null;
+    }
 
-        updateFields.push(`${dbField} = $${paramCount}`);
-        values.push(value);
-        paramCount++;
-      }
-    });
+    updateFields.push(`${dbField} = $${paramCount}`);
+    values.push(value);
+    paramCount++;
+  }
+});
+
 
     // 总是更新 updated_at
     updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
